@@ -16,10 +16,10 @@ control 'V-73217' do
   desc "check", "Verify each user with administrative privileges has been
   assigned a unique administrative account separate from their standard user
   account.
-
   If users with administrative privileges do not have separate accounts for
   administrative functions and standard user functions, this is a finding."
   desc "fix", "Ensure each user with administrative privileges has a separate account for user duties and one for privileged duties."
+
   describe "A manual review is required to verify that each user with administrative privileges has a separate account for user duties and one for privileged duties." do
     skip "A manual review is required to verify that each user with administrative privileges has a separate account for user duties and one for privileged duties."
   end

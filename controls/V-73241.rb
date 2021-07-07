@@ -18,6 +18,9 @@ control 'V-73241' do
 
   If there is no anti-virus solution installed on the system, this is a finding."
   desc "fix", 'Install an anti-virus solution on the system.'
+
+  windefend = powershell('Get-Service -Name windefend | Select-Object -ExpandProperty Status').stdout.strip
+
   describe.one do
     describe registry_key('HKLM\SOFTWARE\Symantec\Symantec Endpoint Protection\CurrentVersion') do
       it { should exist }
@@ -27,6 +30,10 @@ control 'V-73241' do
     end
     describe registry_key('HKLM\SOFTWARE\McAfee\Endpoint\AV\ProductVersion') do
       it { should exist }
+    end
+    describe "Windows Defender" do
+      subject { windefend }
+      it { should eq "Running" }
     end
   end
 end

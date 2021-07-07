@@ -38,10 +38,15 @@ inputs:
     value:
       - "tempuser"
 
-  - name: emergency_account
+  - name: emergency_accounts
     description: 'List of emergency accounts on the system'
     type: Array
     value: []
+
+  - name: emergency_account_period
+    desc: "List the number of days that temporary accounts remain active for"
+    type: Numeric
+    value: 3
 
   - name: administrator_domain_group
     description: 'List of authorized users in the local Administrators domain group'

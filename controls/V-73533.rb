@@ -30,22 +30,14 @@ control 'V-73533' do
   domain-joined computers to Disabled."
   domain_role = command('wmic computersystem get domainrole | Findstr /v DomainRole').stdout.strip
 
-  if !(domain_role == '4') && !(domain_role == '5') && !(domain_role == '2')
+  if domain_role == '3'
     describe registry_key('HKEY_LOCAL_MACHINE\\Software\\Policies\\Microsoft\\Windows\\System') do
       it { should have_property 'EnumerateLocalUsers' }
       its('EnumerateLocalUsers') { should cmp 0 }
     end
-  end
-
-  if domain_role == '4' || domain_role == '5'
+  else
     impact 0.0
-    desc 'This system is a domain controller, therefore this control is not applicable as it only applies to member servers and standalone systems'
-  end
-
-  if domain_role == '2'
-    impact 0.0
-    describe 'This system is not joined to a domain, therfore this control is not appliable as it does not apply to standalone systems' do
-      skip 'This system is not joined to a domain, therfore this control is not appliable as it does not apply to standalone systems'
-    end
+    describe 'This control is not applicable as it only applies to member servers' do
+      skip 'This control is not applicable as it only applies to member servers'
   end
 end

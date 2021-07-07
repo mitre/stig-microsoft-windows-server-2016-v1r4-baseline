@@ -69,71 +69,70 @@ control 'V-73285' do
   Local accounts can be configured to expire with the command Net user
   [username] /expires:[mm/dd/yyyy], where username is the name of the temporary
   user account."
-  emergency_account = input('emergency_account')
-  if !emergency_account.empty?
 
-    emergency_account.each do |user|
+  domain_role = command('wmic computersystem get domainrole | Findstr /v DomainRole').stdout.strip
+  emergency_accounts_list = input('emergency_accounts')
+  emergency_accounts_data = []
 
-      get_account_expires = command("Net User #{user} | Findstr /i 'expires' | Findstr /v 'password'").stdout.strip
-
-      month_account_expires = get_account_expires[28..30]
-      day_account_expires = get_account_expires[32..33]
-      year_account_expires = get_account_expires[35..39]
-
-      if get_account_expires[30] == '/'
-        month_account_expires = get_account_expires[28..29]
-        if get_account_expires[32] == '/'
-          day_account_expires = get_account_expires[31]
-        end
-        if get_account_expires[32] != '/'
-          day_account_expires = get_account_expires[31..32]
-        end
-        if get_account_expires[33] == '/'
-          year_account_expires = get_account_expires[34..37]
-        end
-        if get_account_expires[33] != '/'
-          year_account_expires = get_account_expires[33..37]
-        end
-      end
-
-      date_expires = day_account_expires + '/' + month_account_expires + '/' + year_account_expires
-
-      get_password_last_set = command("Net User #{user}  | Findstr /i 'Password Last Set' | Findstr /v 'expires changeable required may logon'").stdout.strip
-
-      month = get_password_last_set[27..29]
-      day = get_password_last_set[31..32]
-      year = get_password_last_set[34..38]
-
-      if get_password_last_set[32] == '/'
-        month = get_password_last_set[27..29]
-        day = get_password_last_set[31]
-        year = get_password_last_set[33..37]
-      end
-      date = day + '/' + month + '/' + year
-
-      date_expires_minus_password_last_set = DateTime.parse(date_expires).mjd - DateTime.parse(date).mjd
-
-      account_expires = get_account_expires[27..33]
-
-      if account_expires == 'Never'
-        describe "#{user}'s account expires" do
-          describe account_expires do
-            it { should_not == 'Never' }
-          end
-        end
-      end
-      next unless account_expires != 'Never'
-      describe "#{user}'s account expires" do
-        describe date_expires_minus_password_last_set do
-          it { should cmp <= 72 }
-        end
-      end
+  if emergency_accounts_list.empty?
+    impact 0.0
+    describe 'There are no Emergency Account listed for this Control' do
+      skip 'There is no value assigned to the input "emergency_accounts"'
     end
 
   else
-    impact 0.0
-    describe 'No emergency accounts exist' do
-      skip 'check not applicable'
+    if domain_role == '4' || domain_role == '5'
+      emergency_accounts_list.each do |account|
+        emergency_accounts_data << json({ command: "Get-ADUser -Identity #{account} -Properties WhenCreated, AccountExpirationDate | Select-Object -Property SamAccountName, @{Name='WhenCreated';Expression={$_.WhenCreated.ToString('yyyy-MM-dd')}}, @{Name='AccountExpirationDate';Expression={$_.AccountExpirationDate.ToString('yyyy-MM-dd')}}| ConvertTo-Json"}).params
+      end
+      emergency_accounts_data.each do |account_data|
+        account_name = account_data.fetch("SamAccountName")
+        if account_data.fetch("WhenCreated") == nil
+          describe "The WhenCreated date for '#{account_name}'" do
+            subject { account_data.fetch("WhenCreated") }
+            it { should_not eq nil }
+          end
+        elsif account_data.fetch("AccountExpirationDate") == nil
+          describe "The AccountExpirationDate date for '#{account_name}'" do
+            subject { account_data.fetch("AccountExpirationDate") }
+            it { should_not eq nil }
+          end
+        else
+          creation_date = Date.parse(account_data.fetch("WhenCreated"))
+          expiration_date = Date.parse(account_data.fetch("AccountExpirationDate"))
+          date_difference = expiration_date.mjd - creation_date.mjd
+          describe "Account expiration days set for '#{account_name}'" do
+            subject { date_difference }
+            it { should cmp <= input('emergency_account_period')}
+          end
+        end
+      end
+    else
+      emergency_accounts_list.each do |account|
+        emergency_accounts_data << json({ command: "Get-LocalUser -Name #{account} | Select-Object -Property Name, @{Name='PasswordLastSet';Expression={$_.PasswordLastSet.ToString('yyyy-MM-dd')}}, @{Name='AccountExpires';Expression={$_.AccountExpires.ToString('yyyy-MM-dd')}} | ConvertTo-Json"}).params
+      end
+      emergency_accounts_data.each do |account_data|
+        user_name = account_data.fetch("Name")
+        if account_data.fetch("PasswordLastSet") == nil
+          describe "The PasswordLastSet date for '#{user_name}'" do
+            subject { account_data.fetch("PasswordLastSet") }
+            it { should_not eq nil }
+          end
+        elsif account_data.fetch("AccountExpires") == nil
+          describe "The AccountExpires date for '#{user_name}'" do
+            subject { account_data.fetch("AccountExpires") }
+            it { should_not eq nil }
+          end
+        else
+          password_date = Date.parse(account_data.fetch("PasswordLastSet"))
+          expiration_date = Date.parse(account_data.fetch("AccountExpires"))
+          date_difference = expiration_date.mjd - password_date.mjd
+          describe "Account expiration days set for '#{user_name}'" do
+            subject { date_difference }
+            it { should cmp <= input('emergency_account_period')}
+          end
+        end
+      end
     end
   end
 end
