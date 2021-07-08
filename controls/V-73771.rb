@@ -51,15 +51,19 @@ control 'V-73771' do
   Settings >> Security Settings >> Local Policies >> User Rights Assignment >>
   Deny log on locally to include the following:
 
+
   Domain Systems Only:
-  - Enterprise Admins Group
-  - Domain Admins Group
+  - Enterprise Admins group (SID* S-1-5-21-root domain-519)
+  - Domain Admins group (SID* S-1-5-21-domain-512)
 
   Systems dedicated to the management of Active Directory (AD admin platforms,
   see V-36436 in the Active Directory Domain STIG) are exempt from this.
 
   All Systems:
-  - Guests Group"
+  - Guests group (SID* S-1-5-32-546)
+
+  * See SIDs in https://docs.microsoft.com/en-us/troubleshoot/windows-server/identity/security-identifiers-in-windows"
+
   is_AD_only_system = input('is_AD_only_system')
   domain_role = command('wmic computersystem get domainrole | Findstr /v DomainRole').stdout.strip
   is_domain = command('wmic computersystem get domain | FINDSTR /V Domain').stdout.strip
@@ -82,17 +86,27 @@ control 'V-73771' do
           skip 'This system is dedicated to the management of Active Directory, therefore this system is exempt from this control'
         end
       else
-        get_domain_sid = command('wmic useraccount get sid | FINDSTR /V SID | Select -First 2').stdout.strip
-        domain_sid = get_domain_sid[9..40]
+        domain_admin_sid_query = <<-EOH
+          $group = New-Object System.Security.Principal.NTAccount('Domain Admins')
+          $sid = $group.Translate([security.principal.securityidentifier]).value
+          $sid | ConvertTo-Json
+        EOH
+        domain_admin_sid = json(command: domain_admin_sid_query).params
+        
+        enterprise_admin_sid_query = <<-EOH
+          $group = New-Object System.Security.Principal.NTAccount('Enterprise Admins')
+          $sid = $group.Translate([security.principal.securityidentifier]).value
+          $sid | ConvertTo-Json
+        EOH
+        enterprise_admin_sid = json(command: enterprise_admin_sid_query).params
+
         describe security_policy do
-          its('SeDenyInteractiveLogonRight') { should include "S-1-21-#{domain_sid}-512" }
+          its('SeDenyNetworkLogonRight') { should include "#{domain_admin_sid}" }
         end
         describe security_policy do
-          its('SeDenyInteractiveLogonRight') { should include "S-1-21-#{domain_sid}-519" }
+          its('SeDenyNetworkLogonRight') { should include "#{enterprise_admin_sid}" }
         end
       end
-    end
-  end
 
   if domain_role == '4' || domain_role == '5'
     impact 0.0
